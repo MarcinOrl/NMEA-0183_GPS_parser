@@ -14,8 +14,10 @@ class GPSParser:
             print(f"{line} -> odrzucona")
             return
 
-        prefix = line[1:6]
-        if not prefix.startswith("GP") or prefix[2:] not in {
+        system = line[1:3]
+        sentence = line[3:6]
+
+        if system not in {"GP", "GL", "GB"} or sentence not in {
             "RMC",
             "GGA",
             "GSA",
@@ -28,16 +30,16 @@ class GPSParser:
         print(f"{line} -> zaakceptowana")
         fields = line.split(",")
 
-        # Parsowanie wg typu
-        if prefix == "GPRMC":
+        # Parsowanie wg typu zdania
+        if sentence == "RMC":
             self._parse_gprmc(fields)
-        elif prefix == "GPGGA":
+        elif sentence == "GGA":
             self._parse_gpgga(fields)
-        elif prefix == "GPGSA":
+        elif sentence == "GSA":
             self._parse_gpgsa(fields)
-        elif prefix == "GPGSV":
+        elif sentence == "GSV":
             self._parse_gpgsv(fields)
-        elif prefix == "GPGLL":
+        elif sentence == "GLL":
             self._parse_gpgll(fields)
 
         self._print_state()
