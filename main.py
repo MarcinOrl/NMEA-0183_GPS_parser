@@ -7,11 +7,12 @@ class GPSParser:
         self.position = {}
         self.visible_sats = []
         self.used_sats = []
+        self.log = open("parser_output.log", "w", encoding="utf-8")
 
     def parse_line(self, line: str):
         line = line.strip()
         if not line.startswith("$") or "*" not in line:
-            print(f"{line} -> odrzucona")
+            print(f"{line} -> odrzucona", file=self.log)
             return
 
         system = line[1:3]
@@ -24,10 +25,10 @@ class GPSParser:
             "GSV",
             "GLL",
         }:
-            print(f"{line} -> odrzucona")
+            print(f"{line} -> odrzucona", file=self.log)
             return
 
-        print(f"{line} -> zaakceptowana")
+        print(f"{line} -> zaakceptowana", file=self.log)
         fields = line.split(",")
 
         # Parsowanie wg typu zdania
@@ -104,7 +105,7 @@ class GPSParser:
         return f"{dec:.6f} {dir}"
 
     def _print_state(self):
-        print("\n[POZYCJA]")
+        print("\n[POZYCJA]", file=self.log)
         for k in [
             "czas",
             "data",
@@ -115,15 +116,16 @@ class GPSParser:
             "kurs",
         ]:
             if k in self.position:
-                print(f"{k.capitalize():<12}: {self.position[k]}")
-        print("\n[UŻYTE SATELITY]")
-        print(", ".join(self.used_sats) if self.used_sats else "Brak")
-        print("\n[WIDOCZNE SATELITY]")
+                print(f"{k.capitalize():<12}: {self.position[k]}", file=self.log)
+        print("\n[UŻYTE SATELITY]", file=self.log)
+        print(", ".join(self.used_sats) if self.used_sats else "Brak", file=self.log)
+        print("\n[WIDOCZNE SATELITY]", file=self.log)
         for s in self.visible_sats:
             print(
-                f"ID: {s['id']}, Elev: {s['elev']}, Azymut: {s['azymut']}, SNR: {s['snr']}"
+                f"ID: {s['id']}, Elev: {s['elev']}, Azymut: {s['azymut']}, SNR: {s['snr']}",
+                file=self.log,
             )
-        print("-" * 40)
+        print("-" * 40, file=self.log)
 
 
 def main():
@@ -131,6 +133,7 @@ def main():
     with open("gps_data.txt", "r") as file:
         for line in file:
             parser.parse_line(line)
+    print("Dane zapisane do pliku parser_output.txt")
 
 
 if __name__ == "__main__":
