@@ -1,7 +1,3 @@
-import re
-from collections import defaultdict
-
-
 class GPSParser:
     def __init__(self):
         self.position = {}
@@ -77,7 +73,6 @@ class GPSParser:
         print(f"{line} -> zaakceptowana", file=self.log)
         fields = line.split(",")
 
-        # Parsowanie wg typu zdania
         if sentence == "RMC":
             self._parse_gprmc(fields)
         elif sentence == "GGA":
