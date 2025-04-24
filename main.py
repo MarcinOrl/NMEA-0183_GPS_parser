@@ -29,12 +29,12 @@ class GPSParser:
             return "-"
         degrees = int(val[:2]) if dir in ("N", "S") else int(val[:3])
         minutes = float(val[2:]) if dir in ("N", "S") else float(val[3:])
-        return f"{degrees}º{minutes:.3f}’ {dir}"
+        return f"{degrees}º{minutes:.4f}’ {dir}"
 
     def _format_angle(self, val):
         try:
             angle = float(val)
-            return f"{angle:.0f}º"
+            return f"{angle:.1f}º"
         except:
             return "-"
 
@@ -71,6 +71,11 @@ class GPSParser:
             return
 
         print(f"{line} -> zaakceptowana", file=self.log)
+
+        if "*" in line:
+            checksum = line.split("*")[-1]
+            self.position["suma_kontrolna"] = checksum
+
         fields = line.split(",")
 
         if sentence == "RMC":
@@ -87,12 +92,8 @@ class GPSParser:
         self._print_state()
 
     def _parse_gprmc(self, f):
-        if "*" in f[11]:
-            mag_val, rest = f[10], f[11]
-            direction, checksum = rest[0], rest[1:].split("*")[1]
-        else:
-            mag_val, direction, checksum = f[10], f[11], "-"
-
+        mag_val = f[10]
+        direction = f[11][0] if f[11] else "-"
         self.position.update(
             {
                 "czas": self._format_time(f[1]),
@@ -102,13 +103,19 @@ class GPSParser:
                 "kurs": self._format_angle(f[8]),
                 "data": self._format_date(f[9]),
                 "odch.mag.": self._format_mag_var(mag_val, direction),
-                "suma_kontrolna": checksum,
+                "status": "aktywny" if f[2] == "A" else "nieaktywny",
             }
         )
 
     def _parse_gpgga(self, f):
         self.position.update(
-            {"wysokość": f[9], "ilość sat.": f[7], "jakość": f[6], "geoid": f[11]}
+            {
+                "wysokość": f[9],
+                "ilość sat.": f[7],
+                "jakość": f[6],
+                "geoid": f[11],
+                "HDOP": f[8],
+            }
         )
 
     def _parse_gpgsa(self, f):
@@ -123,6 +130,17 @@ class GPSParser:
         )
 
     def _parse_gpgsv(self, f):
+        try:
+            total_msgs = int(f[1])
+            msg_num = int(f[2])
+            total_sats = int(f[3])
+        except:
+            return
+
+        if msg_num == 1:
+            self.visible_sats = []
+            self.position["total_sats"] = str(total_sats)
+
         for i in range(4, len(f) - 1, 4):
             try:
                 sat = {
@@ -138,40 +156,33 @@ class GPSParser:
     def _parse_gpgll(self, f):
         self.position.update(
             {
-                "czas": f[5],
-                "szerokość": self._parse_coord(f[1], f[2]),
-                "długość": self._parse_coord(f[3], f[4]),
+                "czas": self._format_time(f[5]),
+                "szerokość": self._format_coord_dms(f[1], f[2]),
+                "długość": self._format_coord_dms(f[3], f[4]),
+                "status": "aktywny" if len(f) > 6 and f[6] == "A" else "nieaktywny",
             }
         )
-
-    def _parse_coord(self, val, dir):
-        if not val:
-            return "-"
-        deg = int(val[:2]) if dir in ("N", "S") else int(val[:3])
-        min = float(val[2:]) if dir in ("N", "S") else float(val[3:])
-        dec = deg + min / 60
-        return f"{dec:.6f} {dir}"
 
     def _print_state(self):
         log = self.log
 
         print("\nINFORMACJE SYSTEMOWE:", file=log)
         print(
-            f"{'Data':<15}"
-            f"{'Czas':<15}"
-            f"{'Odch.mag.':<12}"
+            f"{'Data':<18}"
+            f"{'Czas':<18}"
+            f"{'Odch.mag.':<15}"
             f"{'Wys.geoid':<12}"
-            f"{'Tryb':<20}"
+            f"{'Tryb':<22}"
             f"{'Jakość':<10}"
             f"{'Suma kontrolna':<18}",
             file=log,
         )
         print(
-            f"{self.position.get('data', '-'):15}"
-            f"{self.position.get('czas', '-'):15}"
-            f"{self.position.get('odch.mag.', '-'):12}"
+            f"{self.position.get('data', '-'):18}"
+            f"{self.position.get('czas', '-'):18}"
+            f"{self.position.get('odch.mag.', '-'):15}"
             f"{self.position.get('geoid', '-'):12}"
-            f"{self.position.get('tryb', '-'):20}"
+            f"{self.position.get('tryb', '-'):22}"
             f"{self.position.get('jakość', '-'):10}"
             f"{self.position.get('suma_kontrolna', '-'):18}",
             file=log,
@@ -179,8 +190,8 @@ class GPSParser:
 
         print("\nPOZYCJA URZĄDZENIA:", file=log)
         print(
-            f"{'Szer.geogr.':<15}"
-            f"{'Dł.geogr.':<15}"
+            f"{'Szer.geogr.':<18}"
+            f"{'Dł.geogr.':<18}"
             f"{'Prędkość':<12}"
             f"{'Kąt ruchu':<12}"
             f"{'Wysokość':<12}"
@@ -193,8 +204,8 @@ class GPSParser:
             file=log,
         )
         print(
-            f"{self.position.get('szerokość', '-'):15}"
-            f"{self.position.get('długość', '-'):15}"
+            f"{self.position.get('szerokość', '-'):18}"
+            f"{self.position.get('długość', '-'):18}"
             f"{self.position.get('prędkość', '-'):12}"
             f"{self.position.get('kurs', '-'):12}"
             f"{self.position.get('wysokość', '-'):12}"
@@ -203,13 +214,13 @@ class GPSParser:
             f"{self.position.get('PDOP', '-'):10}"
             f"{self.position.get('ilość sat.', '-'):15}"
             f"{', '.join(self.used_sats) if self.used_sats else '-':30}"
-            f"{'aktywny' if self.used_sats else '-':<10}",
+            f"{self.position.get('status', '-'):10}",
             file=log,
         )
 
         print("\nDANE O SATELITACH:", file=log)
         print(
-            f"{'Czas pozycji':<15}"
+            f"{'Czas pozycji':<18}"
             f"{'Liczba widocznych':<22}"
             f"{'ID':<6}"
             f"{'Elev.':<8}"
@@ -221,8 +232,8 @@ class GPSParser:
         if self.visible_sats:
             for sat in self.visible_sats:
                 print(
-                    f"{self.position.get('czas', '-'):15}"
-                    f"{len(self.visible_sats):<22}"
+                    f"{self.position.get('czas', '-'):18}"
+                    f"{self.position.get('total_sats', '-'):22}"
                     f"{sat['id']:<6}"
                     f"{sat['elev']:<8}"
                     f"{sat['azymut']:<8}"
@@ -240,7 +251,8 @@ def main():
     with open("gps_data.txt", "r") as file:
         for line in file:
             parser.parse_line(line)
-    print("Dane zapisane do pliku parser_output.txt")
+    parser.log.close()
+    print("Dane zapisane do parser_output.log")
 
 
 if __name__ == "__main__":
